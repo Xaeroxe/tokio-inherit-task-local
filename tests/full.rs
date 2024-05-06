@@ -65,3 +65,9 @@ async fn not_inherited_repeatedly_if_chain_broken() {
         .unwrap();
     assert_eq!(out, 5);
 }
+
+#[tokio::test]
+async fn use_another_test_value() {
+    let out = ANOTHER_TEST_VALUE.scope(5, async { ANOTHER_TEST_VALUE.with(|&v| v) }).await;
+    assert_eq!(out, 5);
+}
