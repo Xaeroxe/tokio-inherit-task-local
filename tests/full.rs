@@ -101,13 +101,12 @@ async fn not_inherited_repeatedly_if_chain_broken() {
     let out = TEST_VALUE
         .scope(5, async {
             tokio::spawn(async {
-                tokio::spawn(async { TEST_VALUE.with(|&v| v) }.inherit_task_local())
+                tokio::spawn(async { TEST_VALUE.with(|&v| v) }.inherit_task_local()).await
             })
             .await
         })
         .await
         .unwrap()
-        .await
         .unwrap();
     assert_eq!(out, 5);
 }
