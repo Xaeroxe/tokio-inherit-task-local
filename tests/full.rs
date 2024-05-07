@@ -34,7 +34,7 @@ async fn fail_try_with_use_both() {
         .scope(String::from("foo"), async { TEST_VALUE.try_with(|&v| v) })
         .await
         .unwrap_err();
-    assert_eq!(out, InheritableAccessError::NotInVec);
+    assert_eq!(out, InheritableAccessError::NotInTable);
 }
 
 #[tokio::test]
