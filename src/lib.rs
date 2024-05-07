@@ -69,7 +69,7 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         }
     }
 
-    pub fn scope<F>(&'static self, value: T, f: F) -> impl Future<Output = F::Output>
+    pub fn scope<F>(&'static self, value: T, f: F) -> TaskLocalFuture<TaskLocalInheritableTable, F>
     where
         F: Future,
     {
