@@ -54,11 +54,11 @@ use tokio::task::futures::TaskLocalFuture;
 /// a given task. You are not meant to use this directly.
 #[derive(Clone)]
 pub struct TaskLocalInheritableTable {
-    inner: Vec<Option<Arc<(dyn Any + Send + Sync + 'static)>>>,
+    inner: Box<[Option<Arc<(dyn Any + Send + Sync + 'static)>>]>,
 }
 
 impl TaskLocalInheritableTable {
-    fn new(inner: Vec<Option<Arc<(dyn Any + Send + Sync + 'static)>>>) -> Self {
+    fn new(inner: Box<[Option<Arc<(dyn Any + Send + Sync + 'static)>>]>) -> Self {
         Self { inner }
     }
 }
@@ -95,17 +95,10 @@ where
 {
     fn inherit_task_local(self) -> TaskLocalFuture<TaskLocalInheritableTable, Self> {
         let mut this = Some(self); // Only one of the two paths will execute, but the borrow checker doesn't know that.
-        INHERITABLE_TASK_LOCALS
-            .try_with(|task_locals| {
-                let new_task_locals = task_locals.clone();
-                INHERITABLE_TASK_LOCALS.scope(new_task_locals, this.take().unwrap())
-            })
-            .unwrap_or_else(|_| {
-                INHERITABLE_TASK_LOCALS.scope(
-                    TaskLocalInheritableTable::new(Vec::new()),
-                    this.take().unwrap(),
-                )
-            })
+        let new_task_locals = INHERITABLE_TASK_LOCALS
+            .try_with(|task_locals| task_locals.clone())
+            .unwrap_or_else(|_| TaskLocalInheritableTable::new(Box::new([])));
+        INHERITABLE_TASK_LOCALS.scope(new_task_locals, this.take().unwrap())
     }
 }
 
@@ -191,21 +184,15 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
     where
         F: Future,
     {
-        let mut value = Some((value, f));
-        INHERITABLE_TASK_LOCALS
+        let mut new_task_locals = INHERITABLE_TASK_LOCALS
             .try_with(|task_locals| {
-                let (value, f) = value.take().unwrap();
                 let mut new_task_locals = task_locals.clone();
                 maybe_init_task_locals(&mut new_task_locals);
-                new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
-                INHERITABLE_TASK_LOCALS.scope(new_task_locals, f)
+                new_task_locals
             })
-            .unwrap_or_else(|_| {
-                let (value, f) = value.take().unwrap();
-                let mut new_task_locals = new_task_local_table();
-                new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
-                INHERITABLE_TASK_LOCALS.scope(new_task_locals, f)
-            })
+            .unwrap_or_else(|_| new_task_local_table());
+        new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
+        INHERITABLE_TASK_LOCALS.scope(new_task_locals, f)
     }
 
     /// Sets a value `T` as the inheritable task-local value for the closure `F`.
@@ -238,21 +225,14 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
     where
         F: FnOnce() -> R,
     {
-        let mut value = Some(value);
-        let new_task_locals = INHERITABLE_TASK_LOCALS
+        let mut new_task_locals = INHERITABLE_TASK_LOCALS
             .try_with(|task_locals| {
-                let value = value.take().unwrap();
                 let mut new_task_locals = task_locals.clone();
                 maybe_init_task_locals(&mut new_task_locals);
-                new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
                 new_task_locals
             })
-            .unwrap_or_else(|_| {
-                let value = value.take().unwrap();
-                let mut new_task_locals = new_task_local_table();
-                new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
-                new_task_locals
-            });
+            .unwrap_or_else(|_| new_task_local_table());
+        new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
         INHERITABLE_TASK_LOCALS.sync_scope(new_task_locals, f)
     }
 
@@ -310,7 +290,7 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
 }
 
 fn new_task_local_table() -> TaskLocalInheritableTable {
-    TaskLocalInheritableTable::new(vec![None; NEXT_KEY.load(Ordering::Relaxed)])
+    TaskLocalInheritableTable::new(vec![None; NEXT_KEY.load(Ordering::Relaxed)].into_boxed_slice())
 }
 
 fn maybe_init_task_locals(new_task_locals: &mut TaskLocalInheritableTable) {
