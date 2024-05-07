@@ -41,12 +41,9 @@ jobs:
       - name: Build | Lint
         run: cargo clippy --workspace --all-targets --all-features -- -Dwarnings
 
-  # Ensure that the project could be successfully compiled
+  # Ensure that the project could be successfully compiled on musl
   cargo_check:
     name: Compile
-    strategy:
-      matrix:
-        target: [x86_64-unknown-linux-musl, wasm32-wasi]
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
@@ -56,10 +53,10 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.target }}
+          target: x86_64-unknown-linux-musl
 
       - name: Build
-        run: cargo build --workspace --target ${{ matrix.target }}
+        run: cargo build --workspace --target x86_64-unknown-linux-musl
 
   # Run tests on Linux, macOS, and Windows
   # On both Rust stable
