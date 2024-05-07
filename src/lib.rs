@@ -1,5 +1,11 @@
 use std::{
-    any::Any, future::Future, marker::PhantomData, sync::{atomic::{AtomicUsize, Ordering}, Arc}
+    any::Any,
+    future::Future,
+    marker::PhantomData,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 pub trait FutureInheritTaskLocal: Future {
@@ -17,7 +23,12 @@ where
                 let new_task_locals = task_locals.clone();
                 INHERITABLE_TASK_LOCALS.scope(new_task_locals, this.take().unwrap())
             })
-            .unwrap_or_else(|_| INHERITABLE_TASK_LOCALS.scope(vec![None; NEXT_KEY.load(Ordering::Relaxed)], this.take().unwrap()))
+            .unwrap_or_else(|_| {
+                INHERITABLE_TASK_LOCALS.scope(
+                    vec![None; NEXT_KEY.load(Ordering::Relaxed)],
+                    this.take().unwrap(),
+                )
+            })
     }
 }
 
@@ -86,7 +97,9 @@ impl<T: Send + Sync + Clone> InheritableLocalKey<T> {
         INHERITABLE_TASK_LOCALS.with(|task_locals| {
             let v = task_locals
                 .get(self.key)
-                .expect("task local vec was the wrong length, this is a tokio-inherit-task-local bug")
+                .expect(
+                    "task local vec was the wrong length, this is a tokio-inherit-task-local bug",
+                )
                 .as_ref()
                 .expect("inheritable task local was not defined");
             (f)(v
@@ -102,7 +115,9 @@ impl<T: Send + Sync + Clone> InheritableLocalKey<T> {
         let r = INHERITABLE_TASK_LOCALS.try_with(|task_locals| {
             let v = task_locals
                 .get(self.key)
-                .expect("task local vec was the wrong length, this is a tokio-inherit-task-local bug")
+                .expect(
+                    "task local vec was the wrong length, this is a tokio-inherit-task-local bug",
+                )
                 .as_ref()
                 .ok_or(InheritableAccessError::NotInHashmap)?;
             Result::<_, InheritableAccessError>::Ok((f)(v.downcast_ref::<T>().expect(
