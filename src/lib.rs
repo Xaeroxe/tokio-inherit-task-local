@@ -148,8 +148,8 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
     #[doc(hidden)]
     pub fn _new() -> Self {
         Self {
-            key: NEXT_KEY.fetch_add(1, ::std::sync::atomic::Ordering::Relaxed),
-            _phantom: ::std::marker::PhantomData,
+            key: NEXT_KEY.fetch_add(1, Ordering::Relaxed),
+            _phantom: PhantomData,
         }
     }
 
