@@ -33,22 +33,23 @@ where
 }
 
 tokio::task_local! {
-    // FIXME: This would be more performant if it were an array accessed by integer indexes instead. Sadly I couldn't
-    // find a way to automatically generate these indexes at compile time.
     static INHERITABLE_TASK_LOCALS: Vec<Option<Arc<dyn Any + Send + Sync + 'static>>>
 }
 
-pub struct InheritableLocalKey<T: Clone + 'static> {
-    // FIXME: This would be more performant of it were some kind of unique integer determined at compile time.
-    // An earlier version of this attempted to abuse TypeIds of unit structs to make this happen, but it wasn't
-    // possible to make the unit structs have unique identifiers without employing a proc-macro.
-    #[doc(hidden)]
-    pub key: usize,
-    #[doc(hidden)]
-    pub _phantom: PhantomData<T>,
+pub struct InheritableLocalKey<T: 'static> {
+    key: usize,
+    _phantom: PhantomData<T>,
 }
 
-impl<T: Send + Sync + Clone> InheritableLocalKey<T> {
+impl<T: Send + Sync> InheritableLocalKey<T> {
+    #[doc(hidden)]
+    pub fn _new() -> Self {
+        Self {
+            key: NEXT_KEY.fetch_add(1, ::std::sync::atomic::Ordering::Relaxed),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+
     pub fn scope<F>(&'static self, value: T, f: F) -> impl Future<Output = F::Output>
     where
         F: Future,
@@ -159,15 +160,11 @@ macro_rules! __inheritable_task_local_inner {
    ($(#[$attr:meta])* $vis:vis $name:ident, $t:ty) => {
        $(#[$attr])*
        #[$crate::ctor::ctor]
-       $vis static $name: $crate::InheritableLocalKey<$t> = $crate::InheritableLocalKey {
-            key: $crate::NEXT_KEY.fetch_add(1, ::std::sync::atomic::Ordering::Relaxed),
-            _phantom: ::std::marker::PhantomData,
-       };
+       $vis static $name: $crate::InheritableLocalKey<$t> = $crate::InheritableLocalKey::_new();
    };
 }
 
-#[doc(hidden)]
-pub static NEXT_KEY: AtomicUsize = AtomicUsize::new(0);
+static NEXT_KEY: AtomicUsize = AtomicUsize::new(0);
 
 #[doc(hidden)]
 pub use ctor;
