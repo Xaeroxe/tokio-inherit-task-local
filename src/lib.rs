@@ -23,12 +23,7 @@ where
                 let new_task_locals = task_locals.clone();
                 INHERITABLE_TASK_LOCALS.scope(new_task_locals, this.take().unwrap())
             })
-            .unwrap_or_else(|_| {
-                INHERITABLE_TASK_LOCALS.scope(
-                    vec![None; NEXT_KEY.load(Ordering::Relaxed)],
-                    this.take().unwrap(),
-                )
-            })
+            .unwrap_or_else(|_| INHERITABLE_TASK_LOCALS.scope(Vec::new(), this.take().unwrap()))
     }
 }
 
@@ -59,12 +54,13 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
             .try_with(|task_locals| {
                 let (value, f) = value.take().unwrap();
                 let mut new_task_locals = task_locals.clone();
+                maybe_init_task_locals(&mut new_task_locals);
                 new_task_locals[self.key] = Some(Arc::new(value) as Arc<_>);
                 INHERITABLE_TASK_LOCALS.scope(new_task_locals, f)
             })
             .unwrap_or_else(|_| {
                 let (value, f) = value.take().unwrap();
-                let mut new_task_locals = vec![None; NEXT_KEY.load(Ordering::Relaxed)];
+                let mut new_task_locals = new_task_local_table();
                 new_task_locals[self.key] = Some(Arc::new(value) as Arc<_>);
                 INHERITABLE_TASK_LOCALS.scope(new_task_locals, f)
             })
@@ -79,12 +75,13 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
             .try_with(|task_locals| {
                 let value = value.take().unwrap();
                 let mut new_task_locals = task_locals.clone();
+                maybe_init_task_locals(&mut new_task_locals);
                 new_task_locals[self.key] = Some(Arc::new(value) as Arc<_>);
                 new_task_locals
             })
             .unwrap_or_else(|_| {
                 let value = value.take().unwrap();
-                let mut new_task_locals = vec![None; NEXT_KEY.load(Ordering::Relaxed)];
+                let mut new_task_locals = new_task_local_table();
                 new_task_locals[self.key] = Some(Arc::new(value) as Arc<_>);
                 new_task_locals
             });
@@ -98,9 +95,7 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         INHERITABLE_TASK_LOCALS.with(|task_locals| {
             let v = task_locals
                 .get(self.key)
-                .expect(
-                    "task local vec was the wrong length, this is a tokio-inherit-task-local bug",
-                )
+                .expect("no inheritable task locals are defined")
                 .as_ref()
                 .expect("inheritable task local was not defined");
             (f)(v
@@ -116,9 +111,7 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         let r = INHERITABLE_TASK_LOCALS.try_with(|task_locals| {
             let v = task_locals
                 .get(self.key)
-                .expect(
-                    "task local vec was the wrong length, this is a tokio-inherit-task-local bug",
-                )
+                .ok_or(InheritableAccessError::NotInVec)?
                 .as_ref()
                 .ok_or(InheritableAccessError::NotInVec)?;
             Result::<_, InheritableAccessError>::Ok((f)(v.downcast_ref::<T>().expect(
@@ -130,6 +123,16 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
             Ok(Err(e)) => Err(e),
             Err(_) => Err(InheritableAccessError::NotInTokio),
         }
+    }
+}
+
+fn new_task_local_table() -> Vec<Option<Arc<dyn Any + Send + Sync>>> {
+    vec![None; NEXT_KEY.load(Ordering::Relaxed)]
+}
+
+fn maybe_init_task_locals(new_task_locals: &mut Vec<Option<Arc<dyn Any + Send + Sync>>>) {
+    if new_task_locals.is_empty() {
+        *new_task_locals = new_task_local_table();
     }
 }
 
