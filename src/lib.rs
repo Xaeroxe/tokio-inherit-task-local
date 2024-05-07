@@ -83,7 +83,7 @@ impl<T: Send + Sync + Clone> InheritableLocalKey<T> {
             })
             .unwrap_or_else(|_| {
                 let value = value.take().unwrap();
-                let mut new_task_locals = Vec::new();
+                let mut new_task_locals = vec![None; NEXT_KEY.load(Ordering::Relaxed)];
                 new_task_locals[self.key] = Some(Arc::new(value) as Arc<_>);
                 new_task_locals
             });
@@ -132,6 +132,7 @@ impl<T: Send + Sync + Clone> InheritableLocalKey<T> {
     }
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum InheritableAccessError {
     NotInHashmap,
     NotInTokio,
