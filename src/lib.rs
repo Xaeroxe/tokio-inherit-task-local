@@ -15,11 +15,11 @@
 //!
 //! async fn foo() {
 //!     let out = DEMO_VALUE
-//!     .scope(5, async {
-//!         tokio::spawn(async { DEMO_VALUE.with(|&v| v) }.inherit_task_local()).await
-//!     })
-//!     .await
-//!     .unwrap();
+//!         .scope(5, async {
+//!            tokio::spawn(async { DEMO_VALUE.with(|&v| v) }.inherit_task_local()).await
+//!         })
+//!         .await
+//!         .unwrap();
 //!     assert_eq!(out, 5);
 //! }
 //! ```
