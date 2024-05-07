@@ -1,3 +1,7 @@
+//! This crate does not support being used from inside of a DLL, .so file, .dylib, or any other kind
+//! of runtime linked configuration. This crate assumes all inheritable task local declarations were available at
+//! compile time.
+
 use std::{
     any::Any,
     fmt::{Debug, Formatter, Result as FmtResult},
@@ -8,6 +12,8 @@ use std::{
         Arc,
     },
 };
+
+use tokio::task::futures::TaskLocalFuture;
 
 #[derive(Clone)]
 pub struct TaskLocalInheritableTable {
@@ -197,4 +203,3 @@ static NEXT_KEY: AtomicUsize = AtomicUsize::new(0);
 
 #[doc(hidden)]
 pub use ctor;
-use tokio::task::futures::TaskLocalFuture;
