@@ -289,6 +289,18 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
     }
 }
 
+impl<T: Clone + Send + Sync> InheritableLocalKey<T> {
+    /// Returns a copy of the inheritable task-local value
+    /// if the task-local value implements `Clone`.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the task local doesn't have a value set.
+    pub fn get(&'static self) -> T {
+        self.with(|v| v.clone())
+    }
+}
+
 fn new_task_local_table() -> TaskLocalInheritableTable {
     TaskLocalInheritableTable::new(vec![None; NEXT_KEY.load(Ordering::Relaxed)].into_boxed_slice())
 }
