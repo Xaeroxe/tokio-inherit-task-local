@@ -8,15 +8,19 @@ use std::{
     },
 };
 
-pub trait FutureInheritTaskLocal: Future {
-    fn inherit_task_local(self) -> impl Future<Output = Self::Output> + Send + Sync + 'static;
+pub trait FutureInheritTaskLocal: Future + Sized {
+    fn inherit_task_local(
+        self,
+    ) -> TaskLocalFuture<Vec<Option<Arc<(dyn Any + Send + Sync + 'static)>>>, Self>;
 }
 
 impl<F> FutureInheritTaskLocal for F
 where
-    F: Future + Send + Sync + 'static,
+    F: Future + 'static,
 {
-    fn inherit_task_local(self) -> impl Future<Output = Self::Output> + Send + Sync + 'static {
+    fn inherit_task_local(
+        self,
+    ) -> TaskLocalFuture<Vec<Option<Arc<(dyn Any + Send + Sync + 'static)>>>, Self> {
         let mut this = Some(self); // Only one of the two paths will execute, but the borrow checker doesn't know that.
         INHERITABLE_TASK_LOCALS
             .try_with(|task_locals| {
@@ -171,3 +175,4 @@ static NEXT_KEY: AtomicUsize = AtomicUsize::new(0);
 
 #[doc(hidden)]
 pub use ctor;
+use tokio::task::futures::TaskLocalFuture;
