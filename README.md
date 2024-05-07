@@ -28,8 +28,7 @@ Even though `DEMO_VALUE` was not defined for the spawned future, it was still ab
 its parent. This happens thanks to the `.inherit_task_local()` method call. That method can be found in
 `FutureInheritTaskLocal`.
 
-These inherited values ***DO NOT*** need to be `Clone`. Child tasks will inherit counted references to the original value, so the value provided is never
-cloned.
+These inherited values ***DO NOT*** need to be `Clone`. Child tasks will inherit counted references to the original value.
 
 This crate does not support being used from inside of a DLL, .so file, .dylib, or any other kind
 of runtime linked configuration. This crate assumes all inheritable task local declarations were available at
