@@ -120,7 +120,7 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
                     "task local vec was the wrong length, this is a tokio-inherit-task-local bug",
                 )
                 .as_ref()
-                .ok_or(InheritableAccessError::NotInHashmap)?;
+                .ok_or(InheritableAccessError::NotInVec)?;
             Result::<_, InheritableAccessError>::Ok((f)(v.downcast_ref::<T>().expect(
                 "internal was not of correct type, this is a tokio-inherit-task-local bug",
             )))
@@ -135,7 +135,7 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum InheritableAccessError {
-    NotInHashmap,
+    NotInVec,
     NotInTokio,
 }
 
