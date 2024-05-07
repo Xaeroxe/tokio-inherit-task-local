@@ -53,8 +53,10 @@ async fn inherit_repeatedly() {
     let out = TEST_VALUE
         .scope(5, async {
             tokio::spawn(
-                async { tokio::spawn(async { TEST_VALUE.with(|&v| v) }.inherit_task_local()).await }
-                    .inherit_task_local(),
+                async {
+                    tokio::spawn(async { TEST_VALUE.with(|&v| v) }.inherit_task_local()).await
+                }
+                .inherit_task_local(),
             )
             .await
         })
