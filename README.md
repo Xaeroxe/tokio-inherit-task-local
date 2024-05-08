@@ -1,4 +1,12 @@
-# tokio-inherit-task-local
+# tokio-inherit-task-local [![Build Status]][actions] [![Latest Version]][crates.io]
+
+[Build Status]: https://img.shields.io/github/actions/workflow/status/Xaeroxe/tokio-inherit-task-local/rust.yml?branch=main
+[actions]: https://github.com/Xaeroxe/tokio-inherit-task-local/actions?query=branch%3Amain
+[Latest Version]: https://img.shields.io/crates/v/tokio-inherit-task-local.svg
+[crates.io]: https://crates.io/crates/tokio-inherit-task-local
+
+[Documentation](https://docs.rs/tokio-inherit-task-local)
+
 
 Provides functionality very similar to [`tokio::task_local`](https://docs.rs/tokio/latest/tokio/macro.task_local.html) with one key difference. Any future annotated with
 `.inherit_task_local()` will inherit the task local values of the task which spawned it. This does not inherit
