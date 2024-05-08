@@ -29,35 +29,26 @@
 //! [`FutureInheritTaskLocal`].
 //!
 //! These inherited values ***DO NOT*** need to be [`Clone`]. Child tasks will inherit counted references to the original value.
-//!
-//! This crate does not support being used from inside of a DLL, .so file, .dylib, or any other kind
-//! of runtime linked configuration. This crate assumes all inheritable task local declarations were available at
-//! compile time. Dynamically linked projects may work by accident, but their behavior is not guaranteed.
-//!
-//! Additionally this crate depends on [`ctor`] and therefore it is subject to the same platform limitations as [`ctor`].
 
 use std::{
     any::Any,
+    collections::HashMap,
     fmt::{Debug, Formatter, Result as FmtResult},
     future::Future,
     marker::PhantomData,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
-
 use tokio::task::futures::TaskLocalFuture;
 
 /// This is mostly an implementation detail. It stores references to all of the inheritable task local values that are available to
 /// a given task. You are not meant to use this directly.
 #[derive(Clone)]
 pub struct TaskLocalInheritableTable {
-    inner: Box<[Option<Arc<(dyn Any + Send + Sync + 'static)>>]>,
+    inner: HashMap<u128, Arc<(dyn Any + Send + Sync + 'static)>>,
 }
 
 impl TaskLocalInheritableTable {
-    fn new(inner: Box<[Option<Arc<(dyn Any + Send + Sync + 'static)>>]>) -> Self {
+    fn new(inner: HashMap<u128, Arc<(dyn Any + Send + Sync + 'static)>>) -> Self {
         Self { inner }
     }
 }
@@ -96,7 +87,7 @@ where
         let mut this = Some(self); // Only one of the two paths will execute, but the borrow checker doesn't know that.
         let new_task_locals = INHERITABLE_TASK_LOCALS
             .try_with(|task_locals| task_locals.clone())
-            .unwrap_or_else(|_| TaskLocalInheritableTable::new(Box::new([])));
+            .unwrap_or_else(|_| TaskLocalInheritableTable::new(HashMap::new()));
         INHERITABLE_TASK_LOCALS.scope(new_task_locals, this.take().unwrap())
     }
 }
@@ -139,19 +130,13 @@ tokio::task_local! {
 ///
 /// [`std::thread::LocalKey`]: struct@std::thread::LocalKey
 pub struct InheritableLocalKey<T: 'static> {
-    key: usize,
-    _phantom: PhantomData<T>,
+    #[doc(hidden)]
+    pub key: u128,
+    #[doc(hidden)]
+    pub _phantom: PhantomData<T>,
 }
 
 impl<T: Send + Sync> InheritableLocalKey<T> {
-    #[doc(hidden)]
-    pub fn _new() -> Self {
-        Self {
-            key: NEXT_KEY.fetch_add(1, Ordering::Relaxed),
-            _phantom: PhantomData,
-        }
-    }
-
     /// Sets a value `T` as the inheritable task-local value for the future `F`.
     ///
     /// Once this future and all of its inheriting descendants have completed, the value
@@ -184,13 +169,11 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         F: Future,
     {
         let mut new_task_locals = INHERITABLE_TASK_LOCALS
-            .try_with(|task_locals| {
-                let mut new_task_locals = task_locals.clone();
-                maybe_init_task_locals(&mut new_task_locals);
-                new_task_locals
-            })
+            .try_with(|task_locals| task_locals.clone())
             .unwrap_or_else(|_| new_task_local_table());
-        new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
+        new_task_locals
+            .inner
+            .insert(self.key, Arc::new(value) as Arc<_>);
         INHERITABLE_TASK_LOCALS.scope(new_task_locals, f)
     }
 
@@ -225,13 +208,11 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         F: FnOnce() -> R,
     {
         let mut new_task_locals = INHERITABLE_TASK_LOCALS
-            .try_with(|task_locals| {
-                let mut new_task_locals = task_locals.clone();
-                maybe_init_task_locals(&mut new_task_locals);
-                new_task_locals
-            })
+            .try_with(|task_locals| task_locals.clone())
             .unwrap_or_else(|_| new_task_local_table());
-        new_task_locals.inner[self.key] = Some(Arc::new(value) as Arc<_>);
+        new_task_locals
+            .inner
+            .insert(self.key, Arc::new(value) as Arc<_>);
         INHERITABLE_TASK_LOCALS.sync_scope(new_task_locals, f)
     }
 
@@ -247,10 +228,9 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         INHERITABLE_TASK_LOCALS.with(|task_locals| {
             let v = task_locals
                 .inner
-                .get(self.key)
-                .expect("no inheritable task locals are defined")
-                .as_ref()
-                .expect("inheritable task local was not defined");
+                .get(&self.key)
+                .expect("inheritable task local was not defined")
+                .as_ref();
             (f)(v
                 .downcast_ref::<T>()
                 .expect("internal was not of correct type, this is a tokio-inherit-task-local bug"))
@@ -267,15 +247,11 @@ impl<T: Send + Sync> InheritableLocalKey<T> {
         F: FnOnce(&T) -> R,
     {
         let r = INHERITABLE_TASK_LOCALS.try_with(|task_locals| {
-            if task_locals.inner.is_empty() {
-                return Err(InheritableAccessError::TableEmpty);
-            }
             let v = task_locals
                 .inner
-                .get(self.key)
-                .ok_or(InheritableAccessError::InvalidKey)?
-                .as_ref()
-                .ok_or(InheritableAccessError::NotInTable)?;
+                .get(&self.key)
+                .ok_or(InheritableAccessError::NotInTable)?
+                .as_ref();
             Ok((f)(v.downcast_ref::<T>().expect(
                 "internal was not of correct type, this is a tokio-inherit-task-local bug",
             )))
@@ -301,13 +277,7 @@ impl<T: Clone + Send + Sync> InheritableLocalKey<T> {
 }
 
 fn new_task_local_table() -> TaskLocalInheritableTable {
-    TaskLocalInheritableTable::new(vec![None; NEXT_KEY.load(Ordering::Relaxed)].into_boxed_slice())
-}
-
-fn maybe_init_task_locals(new_task_locals: &mut TaskLocalInheritableTable) {
-    if new_task_locals.inner.is_empty() {
-        *new_task_locals = new_task_local_table();
-    }
+    TaskLocalInheritableTable::new(HashMap::new())
 }
 
 /// Returned when the requested inheritable task local did not have a value set.
@@ -315,11 +285,6 @@ fn maybe_init_task_locals(new_task_locals: &mut TaskLocalInheritableTable) {
 pub enum InheritableAccessError {
     /// Inheritable task locals are available to this future, however this key doesn't have a corresponding value.
     NotInTable,
-    /// Inheritable task locals are initialized, however none of them have been set.
-    TableEmpty,
-    /// Inheritable task locals are initialized, however there is no slot that corresponds to this key.
-    /// This error should not occur unless the API is used in an unsupported way.
-    InvalidKey,
     /// Inheritable task locals are not initialized for this future at all.
     NotInTokio,
 }
@@ -368,12 +333,12 @@ macro_rules! inheritable_task_local {
 macro_rules! __inheritable_task_local_inner {
    ($(#[$attr:meta])* $vis:vis $name:ident, $t:ty) => {
        $(#[$attr])*
-       #[$crate::ctor::ctor]
-       $vis static $name: $crate::InheritableLocalKey<$t> = $crate::InheritableLocalKey::_new();
+       $vis static $name: $crate::InheritableLocalKey<$t> = $crate::InheritableLocalKey {
+            key: $crate::const_random::const_random!(u128),
+            _phantom: ::std::marker::PhantomData,
+       };
    };
 }
 
-static NEXT_KEY: AtomicUsize = AtomicUsize::new(0);
-
 #[doc(hidden)]
-pub use ctor;
+pub use const_random;

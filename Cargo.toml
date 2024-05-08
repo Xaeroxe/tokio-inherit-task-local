@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ctor = "0.2.8"
+const-random = "0.1.18"
 tokio = { version = "1.37.0", features = ["rt"] }
 
 [dev-dependencies]

@@ -29,9 +29,3 @@ its parent. This happens thanks to the `.inherit_task_local()` method call. That
 `FutureInheritTaskLocal`.
 
 These inherited values ***DO NOT*** need to be `Clone`. Child tasks will inherit counted references to the original value.
-
-This crate does not support being used from inside of a DLL, .so file, .dylib, or any other kind
-of runtime linked configuration. This crate assumes all inheritable task local declarations were available at
-compile time. Dynamically linked projects may work by accident, but their behavior is not guaranteed.
-
-Additionally this crate depends on [`ctor`](https://crates.io/crates/ctor) and therefore it is subject to the same platform limitations as [`ctor`](https://crates.io/crates/ctor).
