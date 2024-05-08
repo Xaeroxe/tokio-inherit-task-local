@@ -84,11 +84,10 @@ where
     F: Future + 'static,
 {
     fn inherit_task_local(self) -> TaskLocalFuture<TaskLocalInheritableTable, Self> {
-        let mut this = Some(self); // Only one of the two paths will execute, but the borrow checker doesn't know that.
         let new_task_locals = INHERITABLE_TASK_LOCALS
             .try_with(|task_locals| task_locals.clone())
             .unwrap_or_else(|_| TaskLocalInheritableTable::new(HashMap::new()));
-        INHERITABLE_TASK_LOCALS.scope(new_task_locals, this.take().unwrap())
+        INHERITABLE_TASK_LOCALS.scope(new_task_locals, self)
     }
 }
 
