@@ -1,7 +1,12 @@
 [package]
 name = "tokio-inherit-task-local"
+description = "Task local variables for tokio that can be inherited across a spawn"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/Xaeroxe/tokio-inherit-task-local"
+documentation = "https://docs.rs/tokio-inherit-task-local"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 const-random = "0.1.18"
