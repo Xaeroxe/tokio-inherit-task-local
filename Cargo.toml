@@ -1,7 +1,7 @@
 [package]
 name = "tokio-inherit-task-local"
 description = "Task local variables for tokio that can be inherited across a spawn"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/Xaeroxe/tokio-inherit-task-local"
 documentation = "https://docs.rs/tokio-inherit-task-local"
@@ -13,4 +13,4 @@ const-random = "0.1.18"
 tokio = { version = "1.37.0", features = ["rt"] }
 
 [dev-dependencies]
-tokio = { version = "1.37.0", features = ["rt", "macros"]}
+tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros"]}

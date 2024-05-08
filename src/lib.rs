@@ -91,6 +91,35 @@ where
     }
 }
 
+/// Returns a closure which has its own copy of the current table for inheritable task locals.
+/// Intended for use with [`tokio::task::spawn_blocking`].
+///
+/// # Example
+/// ```
+/// use tokio_inherit_task_local::{inherit_task_local, inheritable_task_local};
+///
+/// inheritable_task_local! {
+///     static NUMBER: u32;
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let output = NUMBER.scope(1, async move {
+///         tokio::task::spawn_blocking(inherit_task_local(|| NUMBER.get())).await.unwrap()
+///     }).await;
+///     assert_eq!(output, 1);
+/// }
+/// ```
+pub fn inherit_task_local<F, R>(f: F) -> impl FnOnce() -> R + Send + 'static
+where
+    F: FnOnce() -> R + Send + 'static,
+{
+    let new_task_locals = INHERITABLE_TASK_LOCALS
+        .try_with(|task_locals| task_locals.clone())
+        .unwrap_or_else(|_| TaskLocalInheritableTable::new(HashMap::new()));
+    move || INHERITABLE_TASK_LOCALS.sync_scope(new_task_locals, f)
+}
+
 tokio::task_local! {
     static INHERITABLE_TASK_LOCALS: TaskLocalInheritableTable
 }
